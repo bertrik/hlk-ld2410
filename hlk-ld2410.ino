@@ -106,14 +106,12 @@ void loop(void)
             printf(">");
         }
     }
-
     // process incoming data from radar
     while (radar.available()) {
         uint8_t c = radar.read();
         if (debug) {
             printf(" %02X", c);
         }
-
         // run receive state machine
         bool done = protocol.process_rx(c);
         if (done) {
@@ -123,4 +121,3 @@ void loop(void)
         }
     }
 }
-

@@ -1,4 +1,4 @@
-#include <string.h> // memset
+#include <string.h>             // memset
 
 
 #include "ld2410-protocol.h"
@@ -12,7 +12,8 @@ LD2410Protocol::LD2410Protocol(void)
     _idx = 0;
 }
 
-size_t LD2410Protocol::build_command(uint8_t *buf, uint16_t cmd, uint16_t cmd_data_len, const uint8_t *cmd_data)
+size_t LD2410Protocol::build_command(uint8_t * buf, uint16_t cmd, uint16_t cmd_data_len,
+                                     const uint8_t * cmd_data)
 {
     // header
     size_t idx = 0;
@@ -39,7 +40,7 @@ size_t LD2410Protocol::build_command(uint8_t *buf, uint16_t cmd, uint16_t cmd_da
     return idx;
 }
 
-size_t LD2410Protocol::build_query(uint8_t *buf, const uint8_t *data, size_t len)
+size_t LD2410Protocol::build_query(uint8_t * buf, const uint8_t * data, size_t len)
 {
     return 0;
 }
@@ -49,9 +50,7 @@ bool LD2410Protocol::process_rx(uint8_t c)
     return 0;
 }
 
-size_t LD2410Protocol::get_data(uint8_t *data)
+size_t LD2410Protocol::get_data(uint8_t * data)
 {
     return 0;
 }
-    
-    
