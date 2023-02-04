@@ -10,14 +10,15 @@
 #include "editline.h"
 #include "cmdproc.h"
 
-#define PIN_TX  D2
-#define PIN_RX  D3
+#define RADAR_BAUD_RATE 256000
+#define PIN_TX  D3
+#define PIN_RX  D2
 #define printf Serial.printf
 
 static LD2410Protocol protocol;
 static SoftwareSerial radar(PIN_RX, PIN_TX);
 static char cmdline[128];
-static bool debug = false;
+static bool debug = true;
 
 static void printhex(const char *prefix, const uint8_t * buf, size_t len)
 {
@@ -28,23 +29,25 @@ static void printhex(const char *prefix, const uint8_t * buf, size_t len)
     printf("\n");
 }
 
-static int do_baud(int argc, char *argv[])
+static int do_config_mode(int argc, char *argv[])
 {
     uint8_t buf[32];
-
-    if (argc < 2) {
-        return CMD_ARG;
-    }
-    int baud = atoi(argv[1]);
-    printf("Setting baud %d\n", baud);
-//    size_t len = protocol.build_command(buf, CMD_BAUD_RATE, baud / 100);
-//    radar_write(buf, len);
-
-    delay(100);
-    radar.begin(baud);
-
+    uint8_t data[] = { 0x01, 0x00 };
+    size_t len = protocol.build_command(buf, LD303_CMD_ENABLE_CONFIG, sizeof(data), data);
+    printhex(">", buf, len);
+    radar.write(buf, len);
     return CMD_OK;
 }
+
+static int do_report_mode(int argc, char *argv[])
+{
+    uint8_t buf[32];
+    size_t len = protocol.build_command(buf, LD303_CMD_END_CONFIG, 0, NULL);
+    printhex(">", buf, len);
+    radar.write(buf, len);
+    return CMD_OK;
+}
+
 
 static int show_help(const cmd_t * cmds)
 {
@@ -58,7 +61,8 @@ static int do_help(int argc, char *argv[]);
 
 static const cmd_t commands[] = {
     { "help", do_help, "Show help" },
-    { "baud", do_baud, "<baudrate> Set baud rate" },
+    { "c", do_config_mode, "Enter config mode" },
+    { "r", do_report_mode, "Enter report mode" },
     { NULL, NULL, NULL }
 };
 
@@ -70,7 +74,8 @@ static int do_help(int argc, char *argv[])
 void setup(void)
 {
     Serial.begin(115200);
-    radar.begin(115200);
+    pinMode(PIN_TX, OUTPUT);
+    radar.begin(256000);
 
     EditInit(cmdline, sizeof(cmdline));
 }
@@ -116,8 +121,7 @@ void loop(void)
         bool done = protocol.process_rx(c);
         if (done) {
             int len = protocol.get_data(buf);
-            printhex("<", buf, len);
-            uint8_t cmd = buf[0];
+            printhex("GOT FRAME <", buf, len);
         }
     }
 }
