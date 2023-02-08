@@ -39,7 +39,7 @@ class LD2410Protocol {
   private:
     state_t _state;
     uint8_t _sum;
-    uint8_t _buf[32];
+    uint8_t _buf[64];
     uint8_t _len;
     uint8_t _idx;
 
@@ -52,6 +52,7 @@ class LD2410Protocol {
 
     // processes received data, returns true if measurement data was found
     bool process_rx(uint8_t c);
+    void reset_rx(void);
 
     // call this when process_rx returns true, copies received data into buffer, returns length
     size_t get_data(uint8_t * data);

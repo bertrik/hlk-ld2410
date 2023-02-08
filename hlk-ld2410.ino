@@ -29,6 +29,12 @@ static void printhex(const char *prefix, const uint8_t * buf, size_t len)
     printf("\n");
 }
 
+static int do_reboot(int argc, char *argv[])
+{
+    ESP.restart();
+    return CMD_OK;
+}
+
 static int do_config_mode(int argc, char *argv[])
 {
     uint8_t buf[32];
@@ -48,6 +54,63 @@ static int do_report_mode(int argc, char *argv[])
     return CMD_OK;
 }
 
+static int do_baud(int argc, char *argv[])
+{
+    uint8_t baud_index = 1;
+
+    if (argc > 1) {
+        baud_index = atoi(argv[1]);
+    }
+    printf("Setting baud index %d\n", baud_index);
+
+    uint8_t buf[32];
+    size_t len;
+
+    // open config
+    uint8_t cmd_open[2] = { 1, 0 };
+    len = protocol.build_command(buf, LD303_CMD_ENABLE_CONFIG, 2, cmd_open);
+    radar.write(buf, len);
+
+    // baud
+    uint8_t cmd_baud[2] = { baud_index, 0 };
+    len = protocol.build_command(buf, LD303_CMD_SET_BAUD_RATE, 2, cmd_baud);
+    radar.write(buf, len);
+
+    // close config
+    len = protocol.build_command(buf, LD303_CMD_END_CONFIG, 0, NULL);
+    radar.write(buf, len);
+
+    return CMD_OK;
+}
+
+// tries to detect the baud rate by attempting baudrates until we get a reply
+static int do_autobaud(int argc, char *argv[])
+{
+    static const int baudrates[] = { 256000, 9600, 19200, 38400, 57600, 115200, 230400, 460800 };
+
+    bool found = false;
+    for (size_t i = 0; i < sizeof(baudrates) / sizeof(*baudrates); i++) {
+        int baudrate = baudrates[i];
+        printf("Attempting baud rate %d ", baudrate);
+        radar.begin(baudrate);
+        protocol.reset_rx();
+        unsigned int start = millis();
+        while (!found && ((millis() - start) < 3000)) {
+            if (radar.available()) {
+                printf(".");
+                uint8_t c = radar.read();
+                found = protocol.process_rx(c);
+            }
+        }
+        printf("\n");
+        if (found) {
+            printf("Succeeded at baud rate %d!\n", baudrate);
+            return CMD_OK;
+        }
+    }
+    printf("Failed to determine baud rate ... :(\n");
+    return CMD_OK;
+}
 
 static int show_help(const cmd_t * cmds)
 {
@@ -61,8 +124,11 @@ static int do_help(int argc, char *argv[]);
 
 static const cmd_t commands[] = {
     { "help", do_help, "Show help" },
+    { "reboot", do_reboot, "Reboot" },
     { "c", do_config_mode, "Enter config mode" },
     { "r", do_report_mode, "Enter report mode" },
+    { "baud", do_baud, "<baudrate> Set baud rate" },
+    { "auto", do_autobaud, "Determine baudrate automatically" },
     { NULL, NULL, NULL }
 };
 
@@ -121,7 +187,7 @@ void loop(void)
         bool done = protocol.process_rx(c);
         if (done) {
             int len = protocol.get_data(buf);
-            printhex("GOT FRAME <", buf, len);
+            printhex("\nGOT FRAME <", buf, len);
         }
     }
 }

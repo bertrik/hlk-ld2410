@@ -40,6 +40,12 @@ size_t LD2410Protocol::build_command(uint8_t * buf, uint16_t cmd, uint16_t cmd_d
     return idx;
 }
 
+void LD2410Protocol::reset_rx(void)
+{
+    _state = HEADER_F4;
+    _len = 0;
+}
+
 bool LD2410Protocol::process_rx(uint8_t c)
 {
     switch (_state) {
@@ -65,6 +71,7 @@ bool LD2410Protocol::process_rx(uint8_t c)
         break;
     case LEN_1:
         _len = c;
+        _state = LEN_2;
         break;
     case LEN_2:
         _len += (c >> 8);
@@ -91,6 +98,7 @@ bool LD2410Protocol::process_rx(uint8_t c)
         _state = (c == 0xF6) ? FOOTER_F5 : HEADER_F4;
         break;
     case FOOTER_F5:
+        _state = HEADER_F4;
         return c == 0xF5;
     default:
         _state = HEADER_F4;
