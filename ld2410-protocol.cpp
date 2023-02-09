@@ -3,13 +3,11 @@
 
 #include "ld2410-protocol.h"
 
-LD2410Protocol::LD2410Protocol(void)
+LD2410Protocol::LD2410Protocol(uint32_t header, uint32_t footer)
 {
-    _state = HEADER_F4;
-    _sum = 0;
-    memset(_buf, 0, sizeof(_buf));
-    _len = 0;
-    _idx = 0;
+    _header = header;
+    _footer = footer;
+    reset_rx();
 }
 
 size_t LD2410Protocol::build_command(uint8_t * buf, uint16_t cmd, uint16_t cmd_data_len,
@@ -42,31 +40,24 @@ size_t LD2410Protocol::build_command(uint8_t * buf, uint16_t cmd, uint16_t cmd_d
 
 void LD2410Protocol::reset_rx(void)
 {
-    _state = HEADER_F4;
+    _delim = _header;
+    _state = HEADER;
+    memset(_buf, 0, sizeof(_buf));
     _len = 0;
+    _idx = 0;
 }
 
 bool LD2410Protocol::process_rx(uint8_t c)
 {
     switch (_state) {
-    case HEADER_F4:
-        if (c == 0xF4) {
-            _state = HEADER_F3;
-        }
-        break;
-    case HEADER_F3:
-        if (c == 0xF3) {
-            _state = HEADER_F2;
-        }
-        break;
-    case HEADER_F2:
-        if (c == 0xF2) {
-            _state = HEADER_F1;
-        }
-        break;
-    case HEADER_F1:
-        if (c == 0xF1) {
-            _state = LEN_1;
+    case HEADER:
+        if (c == (_delim & 0xFF)) {
+            _delim = _delim >> 8;
+            if (_delim == 0) {
+                _state = LEN_1;
+            }
+        } else {
+            reset_rx();
         }
         break;
     case LEN_1:
@@ -75,33 +66,32 @@ bool LD2410Protocol::process_rx(uint8_t c)
         break;
     case LEN_2:
         _len += (c >> 8);
+        _delim = _footer;
         if (_len < sizeof(_buf)) {
             _idx = 0;
-            _state = (_len > 0) ? DATA : FOOTER_F8;
+            _state = (_len > 0) ? DATA : FOOTER;
         } else {
-            _state = HEADER_F4;
+            _state = HEADER;
         }
         break;
     case DATA:
         _buf[_idx++] = c;
         if (_idx == _len) {
-            _state = FOOTER_F8;
+            _state = FOOTER;
         }
         break;
-    case FOOTER_F8:
-        _state = (c == 0xF8) ? FOOTER_F7 : HEADER_F4;
+    case FOOTER:
+        if (c == (_delim & 0xFF)) {
+            _delim = _delim >> 8;
+            if (_delim == 0) {
+                return true;
+            }
+        } else {
+            reset_rx();
+        }
         break;
-    case FOOTER_F7:
-        _state = (c == 0xF7) ? FOOTER_F6 : HEADER_F4;
-        break;
-    case FOOTER_F6:
-        _state = (c == 0xF6) ? FOOTER_F5 : HEADER_F4;
-        break;
-    case FOOTER_F5:
-        _state = HEADER_F4;
-        return c == 0xF5;
     default:
-        _state = HEADER_F4;
+        reset_rx();
         break;
     }
     return false;

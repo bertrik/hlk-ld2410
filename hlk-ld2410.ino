@@ -15,10 +15,11 @@
 #define PIN_RX  D2
 #define printf Serial.printf
 
-static LD2410Protocol protocol;
+static LD2410Protocol proto_ack = LD2410Protocol(0xFAFBFCFD, 0x01020304);
+static LD2410Protocol proto_rsp = LD2410Protocol(0xF1F2F3F4, 0xF5F6F7F8);
 static SoftwareSerial radar(PIN_RX, PIN_TX);
 static char cmdline[128];
-static bool debug = true;
+static bool debug = false;
 
 static void printhex(const char *prefix, const uint8_t * buf, size_t len)
 {
@@ -35,11 +36,17 @@ static int do_reboot(int argc, char *argv[])
     return CMD_OK;
 }
 
+static int do_debug(int argc, char *argv[])
+{
+    debug = !debug;
+    return CMD_OK;
+}
+
 static int do_config_mode(int argc, char *argv[])
 {
     uint8_t buf[32];
     uint8_t data[] = { 0x01, 0x00 };
-    size_t len = protocol.build_command(buf, LD303_CMD_ENABLE_CONFIG, sizeof(data), data);
+    size_t len = proto_rsp.build_command(buf, LD303_CMD_ENABLE_CONFIG, sizeof(data), data);
     printhex(">", buf, len);
     radar.write(buf, len);
     return CMD_OK;
@@ -48,7 +55,7 @@ static int do_config_mode(int argc, char *argv[])
 static int do_report_mode(int argc, char *argv[])
 {
     uint8_t buf[32];
-    size_t len = protocol.build_command(buf, LD303_CMD_END_CONFIG, 0, NULL);
+    size_t len = proto_rsp.build_command(buf, LD303_CMD_END_CONFIG, 0, NULL);
     printhex(">", buf, len);
     radar.write(buf, len);
     return CMD_OK;
@@ -68,16 +75,16 @@ static int do_baud(int argc, char *argv[])
 
     // open config
     uint8_t cmd_open[2] = { 1, 0 };
-    len = protocol.build_command(buf, LD303_CMD_ENABLE_CONFIG, 2, cmd_open);
+    len = proto_rsp.build_command(buf, LD303_CMD_ENABLE_CONFIG, 2, cmd_open);
     radar.write(buf, len);
 
     // baud
     uint8_t cmd_baud[2] = { baud_index, 0 };
-    len = protocol.build_command(buf, LD303_CMD_SET_BAUD_RATE, 2, cmd_baud);
+    len = proto_rsp.build_command(buf, LD303_CMD_SET_BAUD_RATE, 2, cmd_baud);
     radar.write(buf, len);
 
     // close config
-    len = protocol.build_command(buf, LD303_CMD_END_CONFIG, 0, NULL);
+    len = proto_rsp.build_command(buf, LD303_CMD_END_CONFIG, 0, NULL);
     radar.write(buf, len);
 
     return CMD_OK;
@@ -93,13 +100,13 @@ static int do_autobaud(int argc, char *argv[])
         int baudrate = baudrates[i];
         printf("Attempting baud rate %d ", baudrate);
         radar.begin(baudrate);
-        protocol.reset_rx();
+        proto_rsp.reset_rx();
         unsigned int start = millis();
         while (!found && ((millis() - start) < 3000)) {
             if (radar.available()) {
                 printf(".");
                 uint8_t c = radar.read();
-                found = protocol.process_rx(c);
+                found = proto_rsp.process_rx(c);
             }
         }
         printf("\n");
@@ -125,6 +132,7 @@ static int do_help(int argc, char *argv[]);
 static const cmd_t commands[] = {
     { "help", do_help, "Show help" },
     { "reboot", do_reboot, "Reboot" },
+    { "debug", do_debug, "Toggle debug mode" },
     { "c", do_config_mode, "Enter config mode" },
     { "r", do_report_mode, "Enter report mode" },
     { "baud", do_baud, "<baudrate> Set baud rate" },
@@ -184,10 +192,13 @@ void loop(void)
             printf(" %02X", c);
         }
         // run receive state machine
-        bool done = protocol.process_rx(c);
-        if (done) {
-            int len = protocol.get_data(buf);
-            printhex("\nGOT FRAME <", buf, len);
+        if (proto_ack.process_rx(c)) {
+            int len = proto_ack.get_data(buf);
+            printhex("ACK <", buf, len);
+        }
+        if (proto_rsp.process_rx(c)) {
+            int len = proto_rsp.get_data(buf);
+            printhex("RSP <", buf, len);
         }
     }
 }

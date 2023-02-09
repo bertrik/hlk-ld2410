@@ -4,17 +4,11 @@
 
 // parsing state
 typedef enum {
-    HEADER_F4,
-    HEADER_F3,
-    HEADER_F2,
-    HEADER_F1,
+    HEADER,
     LEN_1,
     LEN_2,
     DATA,
-    FOOTER_F8,
-    FOOTER_F7,
-    FOOTER_F6,
-    FOOTER_F5,
+    FOOTER,
 } state_t;
 
 typedef enum {
@@ -38,13 +32,17 @@ class LD2410Protocol {
 
   private:
     state_t _state;
-    uint8_t _sum;
     uint8_t _buf[64];
     uint8_t _len;
     uint8_t _idx;
+    uint32_t _delim;
+    uint32_t _header;
+    uint32_t _footer;
 
   public:
-     LD2410Protocol();
+    // FAFBFCFD/01020304 for ACK
+    // F1F2F3F4/F5F6F7F8 for report
+    LD2410Protocol(uint32_t header, uint32_t footer);
 
     // builds a command
     size_t build_command(uint8_t * buf, uint16_t cmd, uint16_t cmd_data_len,
