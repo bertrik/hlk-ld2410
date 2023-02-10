@@ -119,6 +119,28 @@ static int do_autobaud(int argc, char *argv[])
     return CMD_OK;
 }
 
+static int do_cmd(int argc, char *argv[])
+{
+    if (argc < 2) {
+        return CMD_ARG;
+    }
+    uint16_t cmd = strtoul(argv[1], NULL, 16);
+
+    uint8_t data[32];
+    int idx = 0;
+    for (int i = 2; i < argc; i++) {
+        data[idx++] = strtoul(argv[i], NULL, 16);
+    }
+
+    printf("Sending cmd %04X + %d bytes...\n", cmd, idx);
+
+    uint8_t buf[32];
+    int len = proto_rsp.build_command(buf, cmd, idx, data);
+    radar.write(buf, len);
+
+    return CMD_OK;
+}
+
 static int show_help(const cmd_t * cmds)
 {
     for (const cmd_t * cmd = cmds; cmd->cmd != NULL; cmd++) {
@@ -137,6 +159,7 @@ static const cmd_t commands[] = {
     { "r", do_report_mode, "Enter report mode" },
     { "baud", do_baud, "<baudrate> Set baud rate" },
     { "auto", do_autobaud, "Determine baudrate automatically" },
+    { "cmd", do_cmd, "[cmd] [data ...] Send custom command (hex)" },
     { NULL, NULL, NULL }
 };
 

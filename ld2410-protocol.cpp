@@ -68,7 +68,6 @@ bool LD2410Protocol::process_rx(uint8_t c)
         _len += (c >> 8);
         _delim = _footer;
         if (_len < sizeof(_buf)) {
-            _idx = 0;
             _state = (_len > 0) ? DATA : FOOTER;
         } else {
             _state = HEADER;
