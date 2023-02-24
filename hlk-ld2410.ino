@@ -168,6 +168,47 @@ static int do_help(int argc, char *argv[])
     return show_help(commands);
 }
 
+static int decode_basic(const uint8_t * data, int len)
+{
+    int index = 0;
+
+    uint8_t target_state = data[index++];
+    uint16_t movement_dist = data[index++];
+    movement_dist = movement_dist + (data[index++] << 8);
+    uint8_t exercise_target_energy = data[index++];
+    uint16_t stationary_target_dist = data[index++];
+    stationary_target_dist = stationary_target_dist + (data[index++] << 8);
+    uint8_t stationary_target_energy = data[index++];
+    uint16_t detection_distance = data[index++];
+    detection_distance = detection_distance + (data[index++] << 8);
+
+    printf("state:%02X,move_d:%5d cm,move_e:%3d,stat_d:%5d cm,stat_e:%3d,detect:%5d cm\n",
+           target_state, movement_dist, exercise_target_energy, stationary_target_dist,
+           stationary_target_energy, detection_distance);
+
+    return index;
+}
+
+static int decode_engineering(const uint8_t * data, int len)
+{
+    int index = decode_basic(data, len);
+    int num_move = data[index++];
+    int num_stat = data[index++];
+
+    printf("move (%d):", num_move);
+    for (int i = 0; i <= min(8, num_move); i++) {
+        printf(" %3d", data[index++]);
+    }
+    printf("\n");
+
+    printf("stat (%d):", num_stat);
+    for (int i = 0; i <= min(8, num_stat); i++) {
+        printf(" %3d", data[index++]);
+    }
+    printf("\n");
+    return index;
+}
+
 void setup(void)
 {
     Serial.begin(115200);
@@ -222,6 +263,18 @@ void loop(void)
         if (proto_rsp.process_rx(c)) {
             int len = proto_rsp.get_data(buf);
             printhex("RSP <", buf, len);
+            uint8_t *rsp = buf + 2;
+            len = len - 4;
+            switch (buf[0]) {
+            case 1:            // engineering mode data
+                decode_engineering(rsp, len);
+                break;
+            case 2:            // target data composition
+                decode_basic(rsp, len);
+                break;
+            default:
+                break;
+            }
         }
     }
 }
