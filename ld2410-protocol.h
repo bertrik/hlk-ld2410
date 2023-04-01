@@ -25,6 +25,7 @@ typedef enum {
     LD303_CMD_SET_BAUD_RATE = 0x00A1,   // baud selection index
     LD303_CMD_FACTORY_RESET = 0x00A2,   // none
     LD303_CMD_RESTART = 0x00A3, // none
+    LD303_CMD_BLUETOOTH = 0x00A4, // 01 00 or 00 00
 
 } ld303_cmd_t;
 

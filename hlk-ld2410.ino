@@ -91,31 +91,36 @@ static int do_baud(int argc, char *argv[])
 }
 
 // tries to detect the baud rate by attempting baudrates until we get a reply
-static int do_autobaud(int argc, char *argv[])
+static int do_serial(int argc, char *argv[])
 {
-    static const int baudrates[] = { 256000, 9600, 19200, 38400, 57600, 115200, 230400, 460800 };
+    static const int baudrates[] = { 9600, 256000, 19200, 38400, 57600, 115200, 230400, 460800 };
 
-    bool found = false;
-    for (size_t i = 0; i < sizeof(baudrates) / sizeof(*baudrates); i++) {
-        int baudrate = baudrates[i];
-        printf("Attempting baud rate %d ", baudrate);
+    if (argc > 1) {
+        int baudrate = atoi(argv[1]);
         radar.begin(baudrate);
-        proto_rsp.reset_rx();
-        unsigned int start = millis();
-        while (!found && ((millis() - start) < 3000)) {
-            if (radar.available()) {
-                printf(".");
-                uint8_t c = radar.read();
-                found = proto_rsp.process_rx(c);
+    } else {
+        bool found = false;
+        for (size_t i = 0; i < sizeof(baudrates) / sizeof(*baudrates); i++) {
+            int baudrate = baudrates[i];
+            printf("Attempting baud rate %d ", baudrate);
+            radar.begin(baudrate);
+            proto_rsp.reset_rx();
+            unsigned int start = millis();
+            while (!found && ((millis() - start) < 3000)) {
+                if (radar.available()) {
+                    uint8_t c = radar.read();
+                    printf("%02X", c);
+                    found = proto_rsp.process_rx(c);
+                }
+            }
+            printf("\n");
+            if (found) {
+                printf("Succeeded at baud rate %d!\n", baudrate);
+                return CMD_OK;
             }
         }
-        printf("\n");
-        if (found) {
-            printf("Succeeded at baud rate %d!\n", baudrate);
-            return CMD_OK;
-        }
+        printf("Failed to determine baud rate ... :(\n");
     }
-    printf("Failed to determine baud rate ... :(\n");
     return CMD_OK;
 }
 
@@ -141,6 +146,37 @@ static int do_cmd(int argc, char *argv[])
     return CMD_OK;
 }
 
+static int do_bt(int argc, char *argv[])
+{
+    if (argc < 2) {
+        return CMD_ARG;
+    }
+    uint16_t enable = (atoi(argv[1]) != 0) ? 1 : 0;
+
+    uint16_t cmd = 0x00A4;
+    int idx = 0;
+    uint8_t data[2];
+    data[idx++] = (enable >> 0) & 0xFF;
+    data[idx++] = (enable >> 8) & 0xFF;
+    uint8_t buf[32];
+    int len = proto_rsp.build_command(buf, cmd, idx, data);
+    radar.write(buf, len);
+
+    uint8_t cmd_open[2] = { 1, 0 };
+    len = proto_rsp.build_command(buf, LD303_CMD_ENABLE_CONFIG, 2, cmd_open);
+    radar.write(buf, len);
+
+    // baud
+    len = proto_rsp.build_command(buf, LD303_CMD_BLUETOOTH, idx, data);
+    radar.write(buf, len);
+
+    // close config
+    len = proto_rsp.build_command(buf, LD303_CMD_END_CONFIG, 0, NULL);
+    radar.write(buf, len);
+
+    return CMD_OK;
+}
+
 static int show_help(const cmd_t * cmds)
 {
     for (const cmd_t * cmd = cmds; cmd->cmd != NULL; cmd++) {
@@ -157,10 +193,11 @@ static const cmd_t commands[] = {
     { "debug", do_debug, "Toggle debug mode" },
     { "c", do_config_mode, "Enter config mode" },
     { "r", do_report_mode, "Enter report mode" },
-    { "baud", do_baud, "<baudrate> Set baud rate" },
-    { "auto", do_autobaud, "Determine baudrate automatically" },
+    { "baud", do_baud, "<baudrate> Send command to set baudrate" },
+    { "serial", do_serial, "[bps] Set baudrate, or determine it automatically" },
     { "cmd", do_cmd, "[cmd] [data ...] Send custom command (hex)" },
-    { NULL, NULL, NULL }
+    { "bt", do_bt, "[1|0] Enable/disable bluetooth)" },
+  { NULL, NULL, NULL }
 };
 
 static int do_help(int argc, char *argv[])
